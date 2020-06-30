@@ -10,7 +10,8 @@ from .knn_classifier import KNN   # remove in v0.7.0
 from .knn_adwin import KNNAdwin   # remove in v0.7.0
 from .sam_knn import SAMKNN   # remove in v0.7.0
 from .knn_regressor import KNNRegressor
+from .weighted_vote_knn_classifier import WeightedKNNClassifier
 
 
 __all__ = ["KNNClassifier", "KNNADWINClassifier", "SAMKNNClassifier", "KNNRegressor",
-           "KNN", "KNNAdwin", "SAMKNN"]
+           "KNN", "KNNAdwin", "SAMKNN", "WeightedKNNClassifier"]
