@@ -9,11 +9,13 @@ class WeightedKNNClassifier(KNNClassifier):
                  max_window_size=1000,
                  leaf_size=30,
                  metric='euclidean',
+                 standardize=False,
                  ):
         super().__init__(n_neighbors=n_neighbors,
                          max_window_size=max_window_size,
                          leaf_size=leaf_size,
                          metric=metric,
+                         standardize=standardize
                          )
         self.classes = []
 

@@ -85,13 +85,18 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
                  max_window_size=1000,
                  leaf_size=30,
                  metric='euclidean',
+                 standardize=False
                  ):
         super().__init__(n_neighbors=n_neighbors,
                          max_window_size=max_window_size,
                          leaf_size=leaf_size,
                          metric=metric,
+                         standardize=standardize
                          )
         self.classes = []
+        self._mean = None
+        self._square_different_to_mean = None
+        self.number_of_instances = 0
 
     def partial_fit(self, X, y, classes=None, sample_weight=None):
         """ Partially (incrementally) fit the model.
@@ -125,11 +130,22 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
 
         """
         r, c = get_dimensions(X)
-
         if classes is not None:
             self.classes = list(set().union(self.classes, classes))
 
+        if self.standardize:
+            if  self._mean is None:
+                self._mean = np.zeros((r, c))
+
+            if  self._square_different_to_mean is None:
+                self._square_different_to_mean = np.zeros((r, c))
+
+        self.number_of_instances += 1
+        self.update_statistics(X)
         for i in range(r):
+            if self.standardize:
+                X[i] = self.apply_standardize(X[i])
+
             self.data_window.add_sample(X[i], y[i])
         return self
 
@@ -168,6 +184,7 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
             class label.
 
         """
+        self.number_of_instances += 1
         r, c = get_dimensions(X)
         if self.data_window is None or self.data_window.size < self.n_neighbors:
             # The model is empty, defaulting to zero
@@ -185,4 +202,31 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
             proba.append(votes)
 
         return np.asarray(proba)
+
+    def update_statistics(self, X):
+        """
+        The Welford's method  is used to calculate the moving standard deviation.
+        we named (n-1)S2 in equation 1 square different to mean
+        equation1: (n-1)s^2 = sigma_1_to_n(x_i - mean(x)_n )^2
+        """
+        differential = np.subtract(X, self._mean)/self.number_of_instances
+        new_mean = self._mean + differential
+        new_square_different_to_mean_increment = \
+            np.subtract(X, new_mean) * np.subtract(X, self._mean)
+        self._mean = new_mean
+        self._square_different_to_mean = \
+            self._square_different_to_mean + new_square_different_to_mean_increment
+
+
+
+    @property
+    def get_mean(self):
+        return self._mean
+
+    @property
+    def get_sd(self):
+        return np.sqrt(self._square_different_to_mean / self.number_of_instances)
+
+    def apply_standardize(self, X):
+        pass
 

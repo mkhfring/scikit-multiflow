@@ -12,7 +12,9 @@ class BaseNeighbors(BaseSKMObject):
                  max_window_size=1000,
                  leaf_size=30,
                  metric='euclidean',
+                 standardize=False
                  ):
+        self.standardize = standardize
         self.n_neighbors = n_neighbors
         self.max_window_size = max_window_size
         self.leaf_size = leaf_size
