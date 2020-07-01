@@ -142,9 +142,11 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
 
             self.number_of_instances += 1
             self.update_statistics(X)
+            standardize_instance = self.apply_standardize(X)
+
 
         for i in range(r):
-            self.data_window.add_sample(X[i], y[i])
+            self.data_window.add_sample(standardize_instance, y[i])
 
         return self
 
@@ -164,9 +166,11 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
 
         """
         if self.standardize:
+            self.number_of_instances += 1
+            self.update_statistics(X)
             standardize_instance = self.apply_standardize(X)
 
-        y_proba = self.predict_proba(X)
+        y_proba = self.predict_proba(standardize_instance)
         y_pred = np.argmax(y_proba, axis=1)
         return y_pred
 
@@ -235,5 +239,6 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
         if c != np.count_nonzero(self.get_sd):
                 return X
 
-        return np.divide(np.subtract(X, self._mean), self.get_sd)
+        X =  np.divide(np.subtract(X, self._mean), self.get_sd)
+        return X
 
