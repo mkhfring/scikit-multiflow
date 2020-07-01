@@ -11,7 +11,6 @@ def test_knn():
         n_neighbors=8,
         max_window_size=2000,
         leaf_size=40,
-        standardize=True
     )
     cnt = 0
     max_samples = 5000

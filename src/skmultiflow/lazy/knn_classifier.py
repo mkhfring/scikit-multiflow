@@ -140,13 +140,12 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
             if  self._square_different_to_mean is None:
                 self._square_different_to_mean = np.zeros((r, c))
 
-        self.number_of_instances += 1
-        self.update_statistics(X)
-        for i in range(r):
-            if self.standardize:
-                X[i] = self.apply_standardize(X[i])
+            self.number_of_instances += 1
+            self.update_statistics(X)
 
+        for i in range(r):
             self.data_window.add_sample(X[i], y[i])
+
         return self
 
     def predict(self, X):
@@ -164,6 +163,9 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
             predicted class labels for all instances in X.
 
         """
+        if self.standardize:
+            standardize_instance = self.apply_standardize(X)
+
         y_proba = self.predict_proba(X)
         y_pred = np.argmax(y_proba, axis=1)
         return y_pred
@@ -228,5 +230,10 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
         return np.sqrt(self._square_different_to_mean / self.number_of_instances)
 
     def apply_standardize(self, X):
-        pass
+#        return np.subtract(X, self._mean)/self.get_sd
+        r, c = get_dimensions(self.get_sd)
+        if c != np.count_nonzero(self.get_sd):
+                return X
+
+        return np.divide(np.subtract(X, self._mean), self.get_sd)
 

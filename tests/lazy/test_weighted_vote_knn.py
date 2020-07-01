@@ -46,7 +46,7 @@ def test_weighted_vote_knn():
     assert correct_predictions == expected_correct_predictions
 
     expected_info = "WeightedKNNClassifier(leaf_size=40, max_window_size=2000, " \
-                    "metric='euclidean', n_neighbors=8)"
+                    "metric='euclidean', n_neighbors=8, standardize=False)"
     info = " ".join([line.strip() for line in learner.get_info().split()])
     assert info == expected_info
 
