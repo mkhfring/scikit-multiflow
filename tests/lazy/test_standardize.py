@@ -24,6 +24,7 @@ def test_standardize():
             np.array([[3, 9]])
         ]
     )
+
     example_targets = np.array(
         [
             [1],
@@ -37,12 +38,13 @@ def test_standardize():
             example_targets[i]
         )
 
+
     moving_average = learner.get_mean
     assert type(moving_average) is np.ndarray
-    assert np.alltrue(moving_average == np.mean(example_features, axis=0))
+    assert np.alltrue(moving_average == np.array([[2, 5]]))
     moving_sd = learner.get_sd
     assert type(moving_sd) is np.ndarray
-    assert np.alltrue(moving_sd == np.std(example_features, axis=0))
+    assert np.alltrue(moving_sd.astype(int) == np.array([[0, 2]]))
     stream = SEAGenerator(random_state=1)
     learner = WeightedKNNClassifier(
         n_neighbors=8,

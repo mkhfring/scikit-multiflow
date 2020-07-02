@@ -134,18 +134,19 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
             self.classes = list(set().union(self.classes, classes))
 
         if self.standardize:
+
             if  self._mean is None:
-                self._mean = np.zeros((r, c))
+                self._mean = np.zeros((c))
 
             if  self._square_different_to_mean is None:
-                self._square_different_to_mean = np.zeros((r, c))
-
-            self.number_of_instances += 1
-            self.update_statistics(X)
-            X = self.apply_standardize(X)
+                self._square_different_to_mean = np.zeros((c))
 
 
         for i in range(r):
+            if self.standardize:
+                self.number_of_instances += 1
+                self.update_statistics(X[i])
+                X[i] = self.apply_standardize(X[i])
             self.data_window.add_sample(X[i], y[i])
 
         return self
@@ -166,9 +167,8 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
 
         """
         if self.standardize:
-            self.number_of_instances += 1
-            self.update_statistics(X)
             X = self.apply_standardize(X)
+
 
         y_proba = self.predict_proba(X)
         y_pred = np.argmax(y_proba, axis=1)
@@ -216,7 +216,7 @@ class KNNClassifier(BaseNeighbors, ClassifierMixin):
         equation1: (n-1)s^2 = sigma_1_to_n(x_i - mean(x)_n )^2
         """
         differential = np.subtract(X, self._mean)/self.number_of_instances
-        new_mean = self._mean + differential
+        new_mean = np.add(self._mean, differential)
         new_square_different_to_mean_increment = \
             np.subtract(X, new_mean) * np.subtract(X, self._mean)
         self._mean = new_mean
