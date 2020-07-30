@@ -13,15 +13,15 @@ class AwsomeHoeffdingTree(HoeffdingTreeClassifier):
         super().__init__()
         self.evaluator_method = ClassificationPerformanceEvaluator
         self.evaluator = self.evaluator_method()
-        assert 1 == 1
 
 
 class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
-    def __init__(self, base_estimator, window_size=100, n_estimators=3):
+    def __init__(self, base_estimator, window_size=100, n_estimators=3, classes=None):
         self.window_size = window_size
         self.n_estimators = n_estimators
         self.base_estimator = base_estimator
+        self.classes = classes
         # The ensemble
         self.ensemble = []
         self.new_classifier_trigger = -1
@@ -46,6 +46,7 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             self.new_classifier_trigger = self.new_classifier_trigger + 1
             if self.new_classifier_trigger == self.window_size:
                 classes, _ = np.unique(self.y_batch, return_counts=True)
+                self.classes = classes
                 new_model = self.train_model(
                     cp.deepcopy(self.base_estimator),
                     self.X_batch,
@@ -69,16 +70,19 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
     def predict_proba(self, X):
         number_of_instances, number_of_features = get_dimensions(X)
-        votes = np.zeros(number_of_instances)
+        # votes = np.zeros(number_of_instances)
+        votes = [0.0 for _ in range(int(max(self.classes) + 1))]
         if len(self.ensemble) <= 0:
             return votes
         for classifier in self.ensemble:
-            votes = votes + 1. / len(self.ensemble) * classifier.predict(X)
+            predicted_target = classifier.predict(X)
+            votes[predicted_target.astype(np.int)[0]] += classifier.evaluator.accuracy_score()
+            # votes = votes + 1. / len(self.ensemble) * classifier.predict(X)
         return votes
 
     def predict(self, X):
         votes = self.predict_proba(X)
-        return (votes >= 0.5) * 1.
+        return np.asarray([np.argmax(votes)])
 
     def reset(self):
         self.ensemble = []
