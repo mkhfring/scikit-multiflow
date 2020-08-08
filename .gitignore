@@ -67,3 +67,4 @@ coverage/
 # IDE
 .spyproject/
 tests/lazy/data
+.ropeproject
