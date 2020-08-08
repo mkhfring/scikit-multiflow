@@ -53,6 +53,5 @@ def test_data_stream(test_path):
         ]
     )
     mean_performance, current_performance = evaluator.get_measurements()
-    import pudb; pudb.set_trace()  # XXX BREAKPOINT
     assert 1 == 1
 
