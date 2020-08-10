@@ -10,8 +10,7 @@ from skmultiflow.data import RandomTreeGenerator, DataStream
 from skmultiflow.evaluation import EvaluatePrequential
 from skmultiflow.trees import HoeffdingTreeClassifier
 from skmultiflow.metrics import ClassificationPerformanceEvaluator
-from skmultiflow.utils import get_dimensions, normalize_values_in_dict, check_random_state, \
-    check_weights
+from skmultiflow.utils import get_dimensions, normalize_values_in_dict
 
 
 class AwsomeHoeffdingTree(HoeffdingTreeClassifier):
@@ -28,7 +27,6 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         self.n_estimators = n_estimators
         self.base_estimator = base_estimator
         self.classes = classes
-        # The ensemble
         self.ensemble = []
         self.new_classifier_trigger = -1
         self.X_batch = None
@@ -85,13 +83,17 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         r, _ = get_dimensions(X)
         y_proba = []
         for i in range(r):
+            # Calculating the probability of each class using hoeffding trees in the ensemble for the current instance
+            # (current batch of instances)
             votes = cp.deepcopy(self.get_votes_for_instance(X[i]))
             if votes == {}:
-                # Estimator is empty, all classes equal, default to zero
                 y_proba.append([0])
+
             else:
                 if sum(votes.values()) != 0:
+                    # Normalizing the votes by dividing each vote from the sum of all the votes
                     votes = normalize_values_in_dict(votes)
+
                 if self.classes is not None:
                     votes_array = np.zeros(int(max(self.classes)) + 1)
                 else:
@@ -102,11 +104,10 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                     except:
                         print('this is not ok ')
                 y_proba.append(votes_array)
-        # Set result as np.array
+
         if self.classes is not None:
             y_proba = np.asarray(y_proba)
         else:
-            # Fill missing values related to unobserved classes to ensure we get a 2D array
             y_proba = np.asarray(list(itertools.zip_longest(*y_proba, fillvalue=0.0))).T
         return y_proba
 
@@ -118,12 +119,14 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             if vote != {} and sum(vote.values()) > 0:
                 vote = normalize_values_in_dict(vote, inplace=True)
                 performance = self.ensemble[i].evaluator.accuracy_score()
-                if performance != 0.0:  # CHECK How to handle negative (kappa) values?
+                if performance != 0.0:
                     for k in vote:
+                        # Multiplying the votes by the performance of each the hoeffding tees in the ensemble
                         vote[k] = vote[k] * performance
                 # Add values
                 for k in vote:
                     try:
+                        # Combining the result predicted by each classifier for each instance
                         combined_votes[k] += vote[k]
                     except KeyError:
                         combined_votes[k] = vote[k]
@@ -144,7 +147,6 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         return model
 
     def sort_ensemble(self):
-        # Using bubble sort to sort the ensemble based on accuracy
         number_of_ensembles = len(self.ensemble)
         for i in range(number_of_ensembles-1):
             for j in range(0, number_of_ensembles-i-1):
@@ -168,8 +170,6 @@ def test_hoeffding_tree_ensemble():
     )
     hoeffding_tree_learner = HoeffdingTreeClassifier(
     )
-    #
-    # # Evaluate
     result = evaluator.evaluate(
         stream=stream,
         model=[
