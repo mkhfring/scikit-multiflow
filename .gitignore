@@ -68,3 +68,5 @@ coverage/
 .spyproject/
 tests/lazy/data
 .ropeproject
+
+tests/practice/data

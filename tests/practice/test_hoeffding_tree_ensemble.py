@@ -1,10 +1,13 @@
 import itertools
+import os
 
 import numpy as np
 import copy as cp
 
+import pandas as pd
 from skmultiflow.core import BaseSKMObject, MetaEstimatorMixin, ClassifierMixin
-from skmultiflow.data import RandomTreeGenerator
+from skmultiflow.data import RandomTreeGenerator, DataStream
+from skmultiflow.evaluation import EvaluatePrequential
 from skmultiflow.trees import HoeffdingTreeClassifier
 from skmultiflow.metrics import ClassificationPerformanceEvaluator
 from skmultiflow.utils import get_dimensions, normalize_values_in_dict, check_random_state, \
@@ -48,13 +51,10 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
             self.new_classifier_trigger = self.new_classifier_trigger + 1
             if self.new_classifier_trigger == self.window_size:
-                classes, _ = np.unique(self.y_batch, return_counts=True)
-                self.classes = classes
                 new_model = self.train_model(
                     cp.deepcopy(self.base_estimator),
                     self.X_batch,
                     self.y_batch,
-                    classes
                 )
                 y_pred = new_model.predict(self.X_batch)
                 for index, prediction in enumerate(y_pred):
@@ -70,6 +70,15 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                 self.new_classifier_trigger = 0
 
         return self
+
+    def predict(self, X):
+        y_proba = self.predict_proba(X)
+        n_rows = y_proba.shape[0]
+        y_pred = np.zeros(n_rows, dtype=int)
+        for i in range(n_rows):
+            index = np.argmax(y_proba[i])
+            y_pred[i] = index
+        return y_pred
 
     def predict_proba(self, X):
 
@@ -88,7 +97,10 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                 else:
                     votes_array = np.zeros(int(max(votes.keys())) + 1)
                 for key, value in votes.items():
-                    votes_array[int(key)] = value
+                    try:
+                        votes_array[int(key)] = value
+                    except:
+                        print('this is not ok ')
                 y_proba.append(votes_array)
         # Set result as np.array
         if self.classes is not None:
@@ -117,14 +129,6 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                         combined_votes[k] = vote[k]
         return combined_votes
 
-    def predict(self, X):
-        y_proba = self.predict_proba(X)
-        n_rows = y_proba.shape[0]
-        y_pred = np.zeros(n_rows, dtype=int)
-        for i in range(n_rows):
-            index = np.argmax(y_proba[i])
-            y_pred[i] = index
-        return y_pred
 
     def reset(self):
         self.ensemble = []
@@ -149,54 +153,31 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
 
 def test_hoeffding_tree_ensemble():
-    stream = RandomTreeGenerator(tree_random_state=112, sample_random_state=112)
+    test_file = os.path.join('data', 'test_data/covtype.csv')
+    raw_data = pd.read_csv(test_file)
+    stream = DataStream(raw_data, name='Test')
     estimator = AwsomeHoeffdingTree()
-    learner = HoeffdingTreeEnsemble(base_estimator=estimator, n_estimators=20)
-    X, y = stream.next_sample(10000)
-    learner.partial_fit(X, y)
-    cnt = 0
-    max_samples = 5000
-    predictions = []
-    true_labels = []
-    wait_samples = 1000
-    correct_predictions = 0
-
-    while cnt < max_samples:
-        X, y = stream.next_sample()
-        # Test every n samples
-        if (cnt % wait_samples == 0) and (cnt != 0):
-            predictions.append(learner.predict(X)[0])
-            true_labels.append(y[0])
-            if np.array_equal(y[0], predictions[-1]):
-                correct_predictions += 1
-
-        learner.partial_fit(X, y)
-        cnt += 1
-    performance = correct_predictions / len(predictions)
-    assert 1 == 1
-
-    stream = RandomTreeGenerator(tree_random_state=112, sample_random_state=112)
-    learner = HoeffdingTreeClassifier(
+    ensemble_learner = HoeffdingTreeEnsemble(base_estimator=estimator, n_estimators=10)
+    metrics = ['accuracy']
+    output_file = os.path.join('data', 'test_data/ensemble_output.csv')
+    evaluator = EvaluatePrequential(
+        max_samples=stream.n_samples,
+        metrics=metrics,
+        pretrain_size=500,
+        output_file=output_file
     )
+    hoeffding_tree_learner = HoeffdingTreeClassifier(
+    )
+    #
+    # # Evaluate
+    result = evaluator.evaluate(
+        stream=stream,
+        model=[
+            ensemble_learner,
+            hoeffding_tree_learner
 
-    cnt = 0
-    max_samples = 5000
-    proba_predictions = []
-    wait_samples = 100000
-    correct_predictions = 0
-
-    while cnt < max_samples:
-        X, y = stream.next_sample()
-        # Test every n samples
-        if (cnt % wait_samples == 0) and (cnt != 0):
-            predictions.append(learner.predict(X)[0])
-            proba_predictions.append(learner.predict_proba(X)[0])
-
-        if np.array_equal(y[0], predictions[-1]):
-            correct_predictions += 1
-
-        learner.partial_fit(X, y)
-        cnt += 1
-
-    performance2 = correct_predictions / len(predictions)
+        ]
+    )
+    mean_performance, current_performance = evaluator.get_measurements()
+    print(current_performance[0].accuracy_score())
     assert 1 == 1
