@@ -1,5 +1,6 @@
 import itertools
 import os
+from random import randint
 
 import numpy as np
 import copy as cp
@@ -13,59 +14,61 @@ from skmultiflow.metrics import ClassificationPerformanceEvaluator
 from skmultiflow.utils import get_dimensions, normalize_values_in_dict
 
 
+
 class AwsomeHoeffdingTree(HoeffdingTreeClassifier):
-    def __init__(self, evaluator=None):
-        super().__init__()
+    def __init__(self, grace_period=200, split_confidence=0.0000001, tie_threshold=0.05):
+        super().__init__(grace_period=grace_period, split_confidence=split_confidence, tie_threshold=tie_threshold)
         self.evaluator_method = ClassificationPerformanceEvaluator
         self.evaluator = self.evaluator_method()
 
 
 class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
-    def __init__(self, base_estimator, window_size=100, n_estimators=3, classes=None):
+    def __init__(self, base_estimator, window_size=100, n_estimators=1, classes=None):
         self.window_size = window_size
         self.n_estimators = n_estimators
-        self.base_estimator = base_estimator
+        self.base_estimator = AwsomeHoeffdingTree
         self.classes = classes
-        self.ensemble = []
+        self.ensemble = None
         self.new_classifier_trigger = -1
         self.X_batch = None
         self.y_batch = None
+        self.ensemble_candidate = None
 
     def partial_fit(self, X, y=None, classes=None, sample_weight=None):
-        number_of_instances, number_of_features = get_dimensions(X)
+        if self.ensemble is None:
+            self._init_ensembles(X, y)
 
-        if self.new_classifier_trigger < 0:
-            # No models yet -- initialize
-            self.X_batch = np.zeros((self.window_size, number_of_features))
-            self.y_batch = np.zeros(self.window_size)
-            self.sample_weight = np.zeros(self.window_size)
-            self.new_classifier_trigger = 0
-
-        for n in range(number_of_instances):
-            self.X_batch[self.new_classifier_trigger] = X[n]
-            self.y_batch[self.new_classifier_trigger] = y[n]
-            self.sample_weight[self.new_classifier_trigger] = sample_weight[n] if sample_weight else 1.0
-
-            self.new_classifier_trigger = self.new_classifier_trigger + 1
-            if self.new_classifier_trigger == self.window_size:
-                new_model = self.train_model(
-                    cp.deepcopy(self.base_estimator),
-                    self.X_batch,
-                    self.y_batch,
-                )
-                y_pred = new_model.predict(self.X_batch)
-                for index, prediction in enumerate(y_pred):
-                    new_model.evaluator.add_result(prediction, self.y_batch[index])
-
-                if len(self.ensemble) > self.n_estimators:
-                    if new_model.evaluator.accuracy_score() > self.ensemble[0].evaluator.accuracy_score():
-                        self.ensemble[0] = new_model
-                else:
-                    self.ensemble.append(new_model)
-
-                self.sort_ensemble()
+        else:
+            number_of_instances, number_of_features = get_dimensions(X)
+            if self.new_classifier_trigger < 0:
+                # No models yet -- initialize
+                self.X_batch = np.zeros((self.window_size, number_of_features))
+                self.y_batch = np.zeros(self.window_size)
+                self.sample_weight = np.zeros(self.window_size)
                 self.new_classifier_trigger = 0
+
+            for n in range(number_of_instances):
+                self.X_batch[self.new_classifier_trigger] = X[n]
+                self.y_batch[self.new_classifier_trigger] = y[n]
+                self.sample_weight[self.new_classifier_trigger] = sample_weight[n] if sample_weight else 1.0
+
+                self.new_classifier_trigger = self.new_classifier_trigger + 1
+                if self.new_classifier_trigger == self.window_size:
+                    self._test_and_train_ensembles_and_condidate(self.X_batch, self.y_batch)
+                    weakest_classifier_index = self.get_weakest_ensemble_classifier()
+                    if self.ensemble_candidate.evaluator.accuracy_score() > \
+                            self.ensemble[weakest_classifier_index].evaluator.accuracy_score():
+                        self.ensemble[weakest_classifier_index] = self.ensemble_candidate
+                        self.ensemble_candidate = self.base_estimator(
+                            grace_period=randint(10, 200)
+                        ).partial_fit(self.X_batch, self.y_batch)
+                    else:
+                        self.ensemble_candidate = self.base_estimator(
+                            grace_period=randint(10, 200)
+                        ).partial_fit(self.X_batch, self.y_batch)
+
+                    self.new_classifier_trigger = 0
 
         return self
 
@@ -146,26 +149,49 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
         return model
 
-    def sort_ensemble(self):
+    def get_weakest_ensemble_classifier(self):
         number_of_ensembles = len(self.ensemble)
+        weakest_classifier_index = 0
         for i in range(number_of_ensembles-1):
             for j in range(0, number_of_ensembles-i-1):
-                if self.ensemble[j].evaluator.accuracy_score() > self.ensemble[j+1].evaluator.accuracy_score():
-                    self.ensemble[j], self.ensemble[j+1] = self.ensemble[j+1], self.ensemble[j]
+                if self.ensemble[j].evaluator.accuracy_score() < self.ensemble[j+1].evaluator.accuracy_score():
+                    weakest_classifier_index = j
+
+        return weakest_classifier_index
+
+    def _init_ensembles(self, X, y, classes=None):
+        self.ensemble_candidate = self.base_estimator(grace_period=randint(10, 200)).partial_fit(X, y, classes)
+        self.ensemble = [self.base_estimator(grace_period=randint(10, 200)).partial_fit(X, y, classes) for e in range(self.n_estimators)]
+        return self
+
+    def _test_and_train_ensembles_and_condidate(self, X, y, classes=None):
+        candidate_prediction = self.ensemble_candidate.predict(X)
+        for index, prediction in enumerate(candidate_prediction):
+            self.ensemble_candidate.evaluator.add_result(prediction, y[index])
+
+        self.ensemble_candidate.partial_fit(X, y, classes)
+        for classifier in self.ensemble:
+            y_pred = classifier.predict(X)
+            for index, prediction in enumerate(y_pred):
+                classifier.evaluator.add_result(prediction, y[index])
+
+            classifier.partial_fit(X, y, classes)
+
+        return self
 
 
 def test_hoeffding_tree_ensemble():
-    test_file = os.path.join('data', 'test_data/covtype.csv')
+    test_file = os.path.join('data', 'test_data/electricity.csv')
     raw_data = pd.read_csv(test_file)
     stream = DataStream(raw_data, name='Test')
-    estimator = AwsomeHoeffdingTree()
-    ensemble_learner = HoeffdingTreeEnsemble(base_estimator=estimator, n_estimators=10)
+    ensemble_learner = HoeffdingTreeEnsemble(base_estimator=AwsomeHoeffdingTree, n_estimators=1)
+
     metrics = ['accuracy']
     output_file = os.path.join('data', 'test_data/ensemble_output.csv')
     evaluator = EvaluatePrequential(
         max_samples=stream.n_samples,
         metrics=metrics,
-        pretrain_size=500,
+        pretrain_size=200,
         output_file=output_file
     )
     hoeffding_tree_learner = HoeffdingTreeClassifier(
@@ -174,7 +200,7 @@ def test_hoeffding_tree_ensemble():
         stream=stream,
         model=[
             ensemble_learner,
-            hoeffding_tree_learner
+             # hoeffding_tree_learner
 
         ]
     )
