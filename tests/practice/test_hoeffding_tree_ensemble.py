@@ -196,7 +196,7 @@ def test_hoeffding_tree_ensemble():
     test_file = os.path.join('data', 'test_data/electricity.csv')
     raw_data = pd.read_csv(test_file)
     stream = DataStream(raw_data, name='Test')
-    ensemble_learner = HoeffdingTreeEnsemble(base_estimator=AwsomeHoeffdingTree, n_estimators=1)
+    ensemble_learner = HoeffdingTreeEnsemble(base_estimator=AwsomeHoeffdingTree, n_estimators=3)
 
     metrics = ['accuracy']
     output_file = os.path.join('data', 'test_data/ensemble_output.csv')
@@ -212,7 +212,7 @@ def test_hoeffding_tree_ensemble():
         stream=stream,
         model=[
             ensemble_learner,
-             # hoeffding_tree_learner
+            hoeffding_tree_learner
 
         ]
     )
