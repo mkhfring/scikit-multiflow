@@ -1,6 +1,6 @@
 import itertools
 import os
-from random import randint
+from random import randint, uniform
 
 import numpy as np
 import copy as cp
@@ -61,11 +61,15 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                             self.ensemble[weakest_classifier_index].evaluator.accuracy_score():
                         self.ensemble[weakest_classifier_index] = self.ensemble_candidate
                         self.ensemble_candidate = self.base_estimator(
-                            grace_period=randint(10, 200)
+                            grace_period=randint(10, 200),
+                            split_confidence=uniform(0, 1),
+                            tie_threshold=uniform(0, 1)
                         ).partial_fit(self.X_batch, self.y_batch)
                     else:
                         self.ensemble_candidate = self.base_estimator(
-                            grace_period=randint(10, 200)
+                            grace_period=randint(10, 200),
+                            split_confidence=uniform(0, 1),
+                            tie_threshold=uniform(0, 1)
                         ).partial_fit(self.X_batch, self.y_batch)
 
                     self.new_classifier_trigger = 0
@@ -160,8 +164,16 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         return weakest_classifier_index
 
     def _init_ensembles(self, X, y, classes=None):
-        self.ensemble_candidate = self.base_estimator(grace_period=randint(10, 200)).partial_fit(X, y, classes)
-        self.ensemble = [self.base_estimator(grace_period=randint(10, 200)).partial_fit(X, y, classes) for e in range(self.n_estimators)]
+        self.ensemble_candidate = self.base_estimator(
+            grace_period=randint(10, 200),
+            split_confidence=uniform(0, 1),
+            tie_threshold=uniform(0, 1)
+        ).partial_fit(X, y, classes)
+        self.ensemble = [self.base_estimator(
+            grace_period=randint(10, 200),
+            split_confidence=uniform(0, 1),
+            tie_threshold=uniform(0, 1)
+        ).partial_fit(X, y, classes) for e in range(self.n_estimators)]
         return self
 
     def _test_and_train_ensembles_and_condidate(self, X, y, classes=None):
