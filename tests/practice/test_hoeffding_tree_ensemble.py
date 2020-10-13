@@ -326,7 +326,7 @@ def test_hoeffding_tree_ensemble():
     evaluator = EvaluatePrequential(
         max_samples=stream.n_samples,
         metrics=metrics,
-        pretrain_size=10000,
+        pretrain_size=4000,
         output_file=output_file
     )
 #    hoeffding_tree_learner = HoeffdingTreeClassifier(
