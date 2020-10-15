@@ -224,61 +224,25 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             self._init_cascades(X, y)
 
         else:
-            pass
-#            self.first_layer_cascade.partial_fit(X, y)
-#            first_layer_prediction = self.first_layer_cascade.predict_proba(X)
-#            extended_features = np.concatenate((X, first_layer_prediction), axis=1)
-#            if np.shape(extended_features)[1] == 7:
-#                pass
-#
-#            self.last_layer_cascade.partial_fit(extended_features, y)
-#            return self
+            self.first_layer_cascade.partial_fit(X, y)
+            first_layer_prediction = self.first_layer_cascade.predict_proba(X)
+            extended_features = np.concatenate((X, first_layer_prediction), axis=1)
+            if np.shape(extended_features)[1] == 7:
+                pass
 
-#            number_of_instances, number_of_features = get_dimensions(X)
-#            if self.new_classifier_trigger < 0:
-#                # No models yet -- initialize
-#                self.X_batch = np.zeros((self.window_size, number_of_features))
-#                self.y_batch = np.zeros(self.window_size)
-#                self.sample_weight = np.zeros(self.window_size)
-#                self.new_classifier_trigger = 0
-#
-#            for n in range(number_of_instances):
-#                self.X_batch[self.new_classifier_trigger] = X[n]
-#                self.y_batch[self.new_classifier_trigger] = y[n]
-#                self.sample_weight[self.new_classifier_trigger] = sample_weight[n] if sample_weight else 1.0
-#
-#                self.new_classifier_trigger = self.new_classifier_trigger + 1
-#                if self.new_classifier_trigger == self.window_size:
-#                    self._test_and_train_ensembles_and_condidate(self.X_batch, self.y_batch)
-#                    weakest_classifier_index = self.get_weakest_ensemble_classifier()
-#                    if self.ensemble_candidate.evaluator.accuracy_score() > \
-#                            self.ensemble[weakest_classifier_index].evaluator.accuracy_score():
-#                        self.ensemble[weakest_classifier_index] = self.ensemble_candidate
-#                        self.ensemble_candidate = self.base_estimator(
-#                            grace_period=randint(10, 200),
-#                            split_confidence=uniform(0, 1),
-#                            tie_threshold=uniform(0, 1)
-#                        ).partial_fit(self.X_batch, self.y_batch)
-#                    else:
-#                        self.ensemble_candidate = self.base_estimator(
-#                            grace_period=randint(10, 200),
-#                            split_confidence=uniform(0, 1),
-#                            tie_threshold=uniform(0, 1)
-#                        ).partial_fit(self.X_batch, self.y_batch)
-#
-#                    self.new_classifier_trigger = 0
-#
-#        return self
+            self.last_layer_cascade.partial_fit(extended_features, y)
+            return self
+
 
     def predict(self, X):
-        return self.last_layer_cascade.predict(X)
-#        y_proba = self.predict_proba(X)
-#        n_rows = y_proba.shape[0]
-#        y_pred = np.zeros(n_rows, dtype=int)
-#        for i in range(n_rows):
-#            index = np.argmax(y_proba[i])
-#            y_pred[i] = index
-#        return y_pred
+#        return self.last_layer_cascade.predict(X)
+        y_proba = self.predict_proba(X)
+        n_rows = y_proba.shape[0]
+        y_pred = np.zeros(n_rows, dtype=int)
+        for i in range(n_rows):
+            index = np.argmax(y_proba[i])
+            y_pred[i] = index
+        return y_pred
 
     def predict_proba(self, X):
         return self.last_layer_cascade.predict_proba(X)
@@ -329,17 +293,17 @@ def test_hoeffding_tree_ensemble():
         pretrain_size=4000,
         output_file=output_file
     )
-#    hoeffding_tree_learner = HoeffdingTreeClassifier(
-#    )
+    hoeffding_tree_learner = HoeffdingTreeClassifier(
+    )
     result = evaluator.evaluate(
         stream=stream,
         model=[
-            deep_stream_learner
+            deep_stream_learner,
+            hoeffding_tree_learner
 
         ]
     )
 
-    import pudb; pudb.set_trace()  # XXX BREAKPOINT
     mean_performance, current_performance = evaluator.get_measurements()
     print(current_performance[0].accuracy_score())
     import pudb; pudb.set_trace()  # XXX BREAKPOINT
