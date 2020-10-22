@@ -12,21 +12,26 @@ from skmultiflow.evaluation import EvaluatePrequential
 from skmultiflow.trees import HoeffdingTreeClassifier
 from skmultiflow.metrics import ClassificationPerformanceEvaluator
 from skmultiflow.utils import get_dimensions, normalize_values_in_dict
+from array import array
 
 
 
 
 
 class AwsomeHoeffdingTree(HoeffdingTreeClassifier):
-    def __init__(self, grace_period=200, split_confidence=0.0000001, tie_threshold=0.05):
-        super().__init__(grace_period=grace_period, split_confidence=split_confidence, tie_threshold=tie_threshold)
+    def __init__(self, grace_period=200, split_confidence=0.0000001,
+                 tie_threshold=0.05, classes=None):
+        super().__init__(grace_period=grace_period,
+                         split_confidence=split_confidence,
+                         tie_threshold=tie_threshold,
+                         classes=classes)
         self.evaluator_method = ClassificationPerformanceEvaluator
         self.evaluator = self.evaluator_method()
 
 
 class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
-    def __init__(self, base_estimator, window_size=100, n_estimators=1, classes=None):
+    def __init__(self, base_estimator=None, window_size=100, n_estimators=1, classes=None):
         self.window_size = window_size
         self.n_estimators = n_estimators
         self.base_estimator = AwsomeHoeffdingTree
@@ -39,7 +44,7 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
     def partial_fit(self, X, y=None, classes=None, sample_weight=None):
         if self.ensemble is None:
-            self._init_ensembles(X, y)
+            self._init_ensembles(X, y, self.classes)
 
         else:
             number_of_instances, number_of_features = get_dimensions(X)
@@ -68,13 +73,15 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                         self.ensemble_candidate = self.base_estimator(
                             grace_period=randint(10, 200),
                             split_confidence=uniform(0, 1),
-                            tie_threshold=uniform(0, 1)
+                            tie_threshold=uniform(0, 1),
+                            classes=self.classes
                         ).partial_fit(self.X_batch, self.y_batch)
                     else:
                         self.ensemble_candidate = self.base_estimator(
                             grace_period=randint(10, 200),
                             split_confidence=uniform(0, 1),
-                            tie_threshold=uniform(0, 1)
+                            tie_threshold=uniform(0, 1),
+                            classes=self.classes
                         ).partial_fit(self.X_batch, self.y_batch)
 
                     self.new_classifier_trigger = 0
@@ -98,6 +105,7 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             # Calculating the probability of each class using hoeffding trees in the ensemble for the current instance
             # (current batch of instances)
             votes = cp.deepcopy(self.get_votes_for_instance(X[i]))
+
             if votes == {}:
                 y_proba.append([0])
 
@@ -128,6 +136,7 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
         for i in range(len(self.ensemble)):
             vote = cp.deepcopy(self.ensemble[i].get_votes_for_instance(X))
+
             if vote != {} and sum(vote.values()) > 0:
                 vote = normalize_values_in_dict(vote, inplace=True)
                 performance = self.ensemble[i].evaluator.accuracy_score()
@@ -172,12 +181,14 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         self.ensemble_candidate = self.base_estimator(
             grace_period=randint(10, 200),
             split_confidence=uniform(0, 1),
-            tie_threshold=uniform(0, 1)
+            tie_threshold=uniform(0, 1),
+            classes=classes
         ).partial_fit(X, y, classes)
         self.ensemble = [self.base_estimator(
             grace_period=randint(10, 200),
             split_confidence=uniform(0, 1),
-            tie_threshold=uniform(0, 1)
+            tie_threshold=uniform(0, 1),
+            classes=classes
         ).partial_fit(X, y, classes) for e in range(self.n_estimators)]
         return self
 
@@ -200,7 +211,8 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
     def __init__(self, n_ensembels=2, classes=None):
         self.base_ensemble_learner = HoeffdingTreeEnsemble(
             base_estimator=AwsomeHoeffdingTree,
-            n_estimators=3
+            n_estimators=3,
+            classes=classes
         )
         self.n_ensembles = n_ensembels
         self.ensembel_learners = None
@@ -228,6 +240,7 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             first_layer_prediction = self.first_layer_cascade.predict_proba(X)
             extended_features = np.concatenate((X, first_layer_prediction), axis=1)
             if np.shape(extended_features)[1] == 7:
+                import pudb; pudb.set_trace()  # XXX BREAKPOINT
                 pass
 
             self.last_layer_cascade.partial_fit(extended_features, y)
@@ -284,27 +297,65 @@ def test_hoeffding_tree_ensemble():
     test_file = os.path.join('data', 'test_data/electricity.csv')
     raw_data = pd.read_csv(test_file)
     stream = DataStream(raw_data, name='Test')
-    deep_stream_learner = DeepStreamLearner()
-    metrics = ['accuracy']
-    output_file = os.path.join('data', 'test_data/ensemble_output.csv')
-    evaluator = EvaluatePrequential(
-        max_samples=stream.n_samples,
-        metrics=metrics,
-        pretrain_size=4000,
-        output_file=output_file
-    )
-    hoeffding_tree_learner = HoeffdingTreeClassifier(
-    )
-    result = evaluator.evaluate(
-        stream=stream,
-        model=[
-            deep_stream_learner,
-            hoeffding_tree_learner
+#    learner = HoeffdingTreeClassifier(
+#        leaf_prediction='nb',
+#        classes=stream.target_values
+#    )
 
-        ]
-    )
+#    learner = HoeffdingTreeEnsemble(
+#        n_estimators=3,
+#        classes=stream.target_values)
+#    learner.classes = stream.target_values
+    learner = DeepStreamLearner(classes=stream.target_values)
 
-    mean_performance, current_performance = evaluator.get_measurements()
-    print(current_performance[0].accuracy_score())
-    import pudb; pudb.set_trace()  # XXX BREAKPOINT
-    assert 1 == 1
+    cnt = 0
+    max_samples = 5000
+    predictions = array('i')
+    proba_predictions = []
+    wait_samples = 1
+    correct_predictions = 0
+
+    while stream.has_more_samples():
+        X, y = stream.next_sample()
+        # Test every n samples
+        if (cnt % wait_samples == 0) and (cnt != 0):
+
+            y_pred = learner.predict(X)
+            if y_pred == y:
+                correct_predictions +=1
+
+            proba_predictions.append(learner.predict_proba(X)[0])
+        learner.partial_fit(X, y)
+        cnt += 1
+
+    expected_info = "HoeffdingTreeClassifier(binary_split=False, grace_period=200, leaf_prediction='nb', " \
+                    "max_byte_size=33554432, memory_estimate_period=1000000, nb_threshold=0, no_preprune=False, " \
+                    "nominal_attributes=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14], remove_poor_atts=False, " \
+                    "split_confidence=1e-07, split_criterion='info_gain', stop_mem_management=False, " \
+                    "tie_threshold=0.05)"
+    info = " ".join([line.strip() for line in learner.get_info().split()])
+    assert info == expected_info
+#    deep_stream_learner = DeepStreamLearner()
+#    metrics = ['accuracy']
+#    output_file = os.path.join('data', 'test_data/ensemble_output.csv')
+#    evaluator = EvaluatePrequential(
+#        max_samples=stream.n_samples,
+#        metrics=metrics,
+#        pretrain_size=500,
+#        output_file=output_file
+#    )
+#    hoeffding_tree_learner = HoeffdingTreeClassifier(
+#    )
+#    result = evaluator.evaluate(
+#        stream=stream,
+#        model=[
+#            deep_stream_learner,
+#            hoeffding_tree_learner
+#
+#        ]
+#    )
+#
+#    mean_performance, current_performance = evaluator.get_measurements()
+#    print(current_performance[0].accuracy_score())
+#    import pudb; pudb.set_trace()  # XXX BREAKPOINT
+#    assert 1 == 1
