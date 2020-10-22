@@ -162,7 +162,8 @@ class HoeffdingTreeClassifier(BaseSKMObject, ClassifierMixin):
                  no_preprune=False,
                  leaf_prediction='nba',
                  nb_threshold=0,
-                 nominal_attributes=None):
+                 nominal_attributes=None,
+                 classes=None):
         """ HoeffdingTreeClassifier class constructor."""
         super().__init__()
         self.max_byte_size = max_byte_size
@@ -188,7 +189,7 @@ class HoeffdingTreeClassifier(BaseSKMObject, ClassifierMixin):
         self._byte_size_estimate_overhead_fraction = 1.0
         self._growth_allowed = True
         self._train_weight_seen_by_model = 0.0
-        self.classes = None
+        self.classes = classes
 
     @property
     def max_byte_size(self):
@@ -464,6 +465,7 @@ class HoeffdingTreeClassifier(BaseSKMObject, ClassifierMixin):
             leaf_node = found_node.node
             if leaf_node is None:
                 leaf_node = found_node.parent
+
             return leaf_node.get_class_votes(X, self)
         else:
             return {}
@@ -521,6 +523,9 @@ class HoeffdingTreeClassifier(BaseSKMObject, ClassifierMixin):
                 for key, value in votes.items():
                     y_proba[int(key)] = value
                 predictions.append(y_proba)
+                if len(y_proba) != 2:
+                    import pudb; pudb.set_trace()  # XXX BREAKPOINT
+                    assert 1 == 1
         # Set result as np.array
         if self.classes is not None:
             predictions = np.asarray(predictions)
