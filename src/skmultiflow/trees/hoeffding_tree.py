@@ -524,7 +524,6 @@ class HoeffdingTreeClassifier(BaseSKMObject, ClassifierMixin):
                     y_proba[int(key)] = value
                 predictions.append(y_proba)
                 if len(y_proba) != 2:
-                    import pudb; pudb.set_trace()  # XXX BREAKPOINT
                     assert 1 == 1
         # Set result as np.array
         if self.classes is not None:

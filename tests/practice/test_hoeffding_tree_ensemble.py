@@ -90,6 +90,8 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
     def predict(self, X):
         y_proba = self.predict_proba(X)
+        if len(y_proba) != 2:
+            assert 1 == 1
         n_rows = y_proba.shape[0]
         y_pred = np.zeros(n_rows, dtype=int)
         for i in range(n_rows):
@@ -107,7 +109,13 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             votes = cp.deepcopy(self.get_votes_for_instance(X[i]))
 
             if votes == {}:
-                y_proba.append([0])
+                if self.classes:
+                    y = [0 for i in range(len(self.classes))]
+                    y_proba.append(y)
+                else:
+                    y_proba.append([0])
+
+#                    y_proba.append([i for i in range(max(self.classes) +1))])
 
             else:
                 if sum(votes.values()) != 0:
@@ -129,6 +137,9 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             y_proba = np.asarray(y_proba)
         else:
             y_proba = np.asarray(list(itertools.zip_longest(*y_proba, fillvalue=0.0))).T
+        if np.shape(y_proba)[1]!= 2:
+            import pudb; pudb.set_trace()  # XXX BREAKPOINT
+            assert 1 == 1
         return y_proba
 
     def get_votes_for_instance(self, X):
@@ -139,18 +150,28 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
             if vote != {} and sum(vote.values()) > 0:
                 vote = normalize_values_in_dict(vote, inplace=True)
+                if self.classes:
+                    y_proba = np.zeros(int(max(self.classes)) + 1)
+                    y_proba_dict = {index: value for index, value in enumerate(y_proba)}
+
                 performance = self.ensemble[i].evaluator.accuracy_score()
                 if performance != 0.0:
                     for k in vote:
                         # Multiplying the votes by the performance of each the hoeffding tees in the ensemble
                         vote[k] = vote[k] * performance
+
+                for key, value in vote.items():
+                    y_proba_dict[float(key)] = value
+
                 # Add values
                 for k in vote:
                     try:
                         # Combining the result predicted by each classifier for each instance
-                        combined_votes[k] += vote[k]
+#                        combined_votes[k] += vote[k]
+                        combined_votes[k] += y_proba_dict[k]
                     except KeyError:
-                        combined_votes[k] = vote[k]
+#                        combined_votes[k] = vote[k]
+                        combined_votes[k] = y_proba_dict[k]
         return combined_votes
 
 
@@ -240,7 +261,6 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             first_layer_prediction = self.first_layer_cascade.predict_proba(X)
             extended_features = np.concatenate((X, first_layer_prediction), axis=1)
             if np.shape(extended_features)[1] == 7:
-                import pudb; pudb.set_trace()  # XXX BREAKPOINT
                 pass
 
             self.last_layer_cascade.partial_fit(extended_features, y)
@@ -258,7 +278,19 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         return y_pred
 
     def predict_proba(self, X):
-        return self.last_layer_cascade.predict_proba(X)
+        first_layer_predict_proba = self.first_layer_cascade.predict_proba(X)
+        extended_features = np.concatenate(
+            (X, first_layer_predict_proba),
+            axis=1
+        )
+        second_layer_predict_proba = self.last_layer_cascade.predict_proba(
+            extended_features
+        )
+        average_proba = (
+            first_layer_predict_proba + second_layer_predict_proba
+        ) / 2
+
+        return average_proba
 
 #        r, _ = get_dimensions(X)
 #        y_proba = []
@@ -324,10 +356,12 @@ def test_hoeffding_tree_ensemble():
             if y_pred == y:
                 correct_predictions +=1
 
-            proba_predictions.append(learner.predict_proba(X)[0])
+
+#            proba_predictions.append(learner.predict_proba(X)[0])
         learner.partial_fit(X, y)
         cnt += 1
 
+    import pudb; pudb.set_trace()  # XXX BREAKPOINT
     expected_info = "HoeffdingTreeClassifier(binary_split=False, grace_period=200, leaf_prediction='nb', " \
                     "max_byte_size=33554432, memory_estimate_period=1000000, nb_threshold=0, no_preprune=False, " \
                     "nominal_attributes=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14], remove_poor_atts=False, " \
