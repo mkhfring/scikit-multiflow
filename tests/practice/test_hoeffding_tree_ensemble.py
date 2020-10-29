@@ -12,7 +12,11 @@ from skmultiflow.evaluation import EvaluatePrequential
 from skmultiflow.trees import HoeffdingTreeClassifier
 from skmultiflow.metrics import ClassificationPerformanceEvaluator
 from skmultiflow.utils import get_dimensions, normalize_values_in_dict
+from skmultiflow.data import RandomTreeGenerator, SEAGenerator
+from tests import TEST_DIRECTORY
+
 from array import array
+
 
 
 
@@ -41,6 +45,8 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         self.X_batch = None
         self.y_batch = None
         self.ensemble_candidate = None
+        self.number_of_correct_predictions = 0
+        self.accuracy_per_sample = []
 
     def partial_fit(self, X, y=None, classes=None, sample_weight=None):
         if self.ensemble is None:
@@ -137,9 +143,9 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             y_proba = np.asarray(y_proba)
         else:
             y_proba = np.asarray(list(itertools.zip_longest(*y_proba, fillvalue=0.0))).T
-        if np.shape(y_proba)[1]!= 2:
-            import pudb; pudb.set_trace()  # XXX BREAKPOINT
-            assert 1 == 1
+#        if np.shape(y_proba)[1] == 2:
+#            import pudb; pudb.set_trace()  # XXX BREAKPOINT
+#            assert 1 == 1
         return y_proba
 
     def get_votes_for_instance(self, X):
@@ -232,12 +238,15 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
     def __init__(self, n_ensembels=2, classes=None):
         self.base_ensemble_learner = HoeffdingTreeEnsemble(
             base_estimator=AwsomeHoeffdingTree,
-            n_estimators=3,
+            n_estimators=10,
             classes=classes
         )
         self.n_ensembles = n_ensembels
         self.ensembel_learners = None
         self.last_layer_cascade = None
+        self.number_of_samples = 0
+        self.accuracy = []
+        self.number_of_correct_predictions = 0
 
     def _init_cascades(self, X, y):
         first_cascade = cp.deepcopy(self.base_ensemble_learner)
@@ -253,6 +262,8 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
 
     def partial_fit(self, X, y=None, classes=None, sample_weight=None):
+        self.number_of_samples += np.shape(X)[0]
+
         if self.ensembel_learners is None:
             self._init_cascades(X, y)
 
@@ -267,18 +278,34 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
             return self
 
 
-    def predict(self, X):
+    def predict(self, X, y=None):
 #        return self.last_layer_cascade.predict(X)
-        y_proba = self.predict_proba(X)
+        y_proba = self.predict_proba(X, y)
         n_rows = y_proba.shape[0]
         y_pred = np.zeros(n_rows, dtype=int)
         for i in range(n_rows):
             index = np.argmax(y_proba[i])
             y_pred[i] = index
+        if y_pred == y:
+            self.number_of_correct_predictions += 1
+
+        self.accuracy.append(
+            self.number_of_correct_predictions / self.number_of_samples
+        )
         return y_pred
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, y=None):
         first_layer_predict_proba = self.first_layer_cascade.predict_proba(X)
+
+        # Try to track the accuracy per samples for the first layer
+        first_layer_prediction = self.first_layer_cascade.predict(X)
+        if first_layer_prediction == y:
+            self.first_layer_cascade.number_of_correct_predictions +=1
+        self.first_layer_cascade.accuracy_per_sample.append(
+
+            self.first_layer_cascade.number_of_correct_predictions / self.number_of_samples
+        )
+
         extended_features = np.concatenate(
             (X, first_layer_predict_proba),
             axis=1
@@ -286,6 +313,17 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         second_layer_predict_proba = self.last_layer_cascade.predict_proba(
             extended_features
         )
+        second_layer_prediction = self.last_layer_cascade.predict(
+            extended_features
+        )
+        if second_layer_prediction == y:
+            self.last_layer_cascade.number_of_correct_predictions +=1
+
+        self.last_layer_cascade.accuracy_per_sample.append(
+
+            self.last_layer_cascade.number_of_correct_predictions / self.number_of_samples
+        )
+
         average_proba = (
             first_layer_predict_proba + second_layer_predict_proba
         ) / 2
@@ -328,7 +366,12 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 def test_hoeffding_tree_ensemble():
     test_file = os.path.join('data', 'test_data/electricity.csv')
     raw_data = pd.read_csv(test_file)
-    stream = DataStream(raw_data, name='Test')
+#    stream = DataStream(raw_data, name='Test')
+    stream = RandomTreeGenerator(
+        tree_random_state=23, sample_random_state=12, n_classes=4,
+        n_cat_features=2, n_num_features=5, n_categories_per_cat_feature=5,
+        max_tree_depth=6, min_leaf_depth=3, fraction_leaves_per_level=0.15
+    )
 #    learner = HoeffdingTreeClassifier(
 #        leaf_prediction='nb',
 #        classes=stream.target_values
@@ -341,18 +384,18 @@ def test_hoeffding_tree_ensemble():
     learner = DeepStreamLearner(classes=stream.target_values)
 
     cnt = 0
-    max_samples = 5000
+    max_samples = 100000
     predictions = array('i')
     proba_predictions = []
     wait_samples = 1
     correct_predictions = 0
 
-    while stream.has_more_samples():
+    while stream.has_more_samples() and cnt < max_samples:
         X, y = stream.next_sample()
         # Test every n samples
         if (cnt % wait_samples == 0) and (cnt != 0):
 
-            y_pred = learner.predict(X)
+            y_pred = learner.predict(X, y)
             if y_pred == y:
                 correct_predictions +=1
 
