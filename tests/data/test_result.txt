@@ -1,0 +1,6 @@
+stream1 accuracy: 0.6666666666666666 
+stream1 first_layer_accuracy: 0.6666666666666666 
+ 
+stream2 accuracy: 0.32323232323232326 
+stream2 first_layer_accuracy: 0.32323232323232326 
+ 
