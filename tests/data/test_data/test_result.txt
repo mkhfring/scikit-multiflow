@@ -1,12 +1,1 @@
-stream1 accuracy: 0.6666666666666666 
-stream1 first_layer_accuracy: 0.6666666666666666 
- 
-stream1 average_accuracy: 0.5838591385851605 
-stream1 first_layer_average_accuracy: 0.5838591385851605 
- 
-stream2 accuracy: 0.32323232323232326 
-stream2 first_layer_accuracy: 0.32323232323232326 
- 
-stream2 average_accuracy: 0.25458956236000857 
-stream2 first_layer_average_accuracy: 0.25458956236000857 
- 
+stream1 accuracy: 0.8008430623910309 

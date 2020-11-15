@@ -43,10 +43,13 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         self.ensemble_candidate = None
         self.number_of_correct_predictions = 0
         self.accuracy_per_sample = []
+        self.estimators_votes = None
 
     def partial_fit(self, X, y=None, classes=None, sample_weight=None):
         if self.ensemble is None:
-            self._init_ensembles(X, y, self.classes)
+            X_random_sample = self.random_sample(X)
+#            self._init_ensembles(X, y, self.classes)
+            self._init_ensembles(X_random_sample, y, self.classes)
 
         else:
             number_of_instances, number_of_features = get_dimensions(X)
@@ -89,6 +92,24 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
                     self.new_classifier_trigger = 0
 
         return self
+
+    def random_sample(self, X):
+        import random
+        from math import sqrt
+
+        rows, columns = X.shape
+        sample = np.zeros((rows,int(sqrt(columns))))
+        for row in range(rows):
+            column_sample_index = random.sample(range(columns), int(sqrt(columns)))
+            for index, column_index in enumerate(sorted(column_sample_index)):
+                sample[row][index] = X[row][column_index]
+
+#            for index in columns_index_samples:
+#                sample.append(X[index])
+
+
+        return sample
+
 
     def predict(self, X):
         y_proba = self.predict_proba(X)
@@ -146,9 +167,22 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
 
     def get_votes_for_instance(self, X):
         combined_votes = {}
+        self.estimators_votes = None
 
         for i in range(len(self.ensemble)):
             vote = cp.deepcopy(self.ensemble[i].get_votes_for_instance(X))
+            if hasattr(self.ensemble[i], 'predict_proba'):
+                ensemble_class_distribution = self.ensemble[i].predict_proba([X])
+
+            if self.estimators_votes is None:
+                self.estimators_votes = ensemble_class_distribution
+            else:
+                self.estimators_votes = np.concatenate(
+                    (self.estimators_votes, ensemble_class_distribution),
+                    axis=1
+                )
+
+
 
             if vote != {} and sum(vote.values()) > 0:
                 vote = normalize_values_in_dict(vote, inplace=True)
@@ -216,6 +250,7 @@ class HoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         return self
 
     def _test_and_train_ensembles_and_condidate(self, X, y, classes=None):
+        X_sample = self.random_sample(X)
         candidate_prediction = self.ensemble_candidate.predict(X)
         for index, prediction in enumerate(candidate_prediction):
             self.ensemble_candidate.evaluator.add_result(prediction, y[index])
@@ -303,7 +338,7 @@ class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
         )
 
         extended_features = np.concatenate(
-            (X, first_layer_predict_proba),
+            (X, self.first_layer_cascade.estimators_votes),
             axis=1
         )
         second_layer_predict_proba = self.last_layer_cascade.predict_proba(
@@ -334,7 +369,13 @@ def test_hoeffding_tree_ensemble():
         test_data_directory,
         'test_data/electricity.csv'
     )
+    test_file2 = os.path.join(
+        test_data_directory,
+        'test_data/sea_abrupt.csv'
+    )
     raw_data = pd.read_csv(test_file)
+    raw_data2 = pd.read_csv(test_file2)
+    stream3 = DataStream(raw_data2, name='Test2')
     stream1 = DataStream(raw_data, name='Test')
     stream2 = RandomTreeGenerator(
         tree_random_state=23, sample_random_state=12, n_classes=4,
@@ -349,11 +390,13 @@ def test_hoeffding_tree_ensemble():
 #    learner = HoeffdingTreeEnsemble(
 #        n_estimators=3,
 #        classes=stream.target_values)
-#    learner.classes = stream.target_values
-    learner = DeepStreamLearner(classes=stream1.target_values)
-    stream1_learner = calculate_accuracy(learner, stream1, 100)
-    learner = DeepStreamLearner(classes=stream2.target_values)
-    stream2_learner = calculate_accuracy(learner, stream2, 100)
+    learner1 = DeepStreamLearner(classes=stream1.target_values)
+    stream1_learner = calculate_accuracy(learner1, stream1, stream1.n_samples)
+#    learner2 = DeepStreamLearner(classes=stream2.target_values)
+#    stream2_learner = calculate_accuracy(learner2, stream2, 100000)
+#    learner3 = DeepStreamLearner(classes=stream3.target_values)
+#    stream3_learner = calculate_accuracy(learner3, stream3, stream3.n_samples)
+    import pudb; pudb.set_trace()  # XXX BREAKPOINT
     with open (
         os.path.join(test_data_directory, 'test_data/test_result.txt'),
         '+w'
@@ -366,6 +409,10 @@ def test_hoeffding_tree_ensemble():
         f.write('stream2 first_layer_accuracy: {} \n'.format(stream2_learner.first_layer_cascade.accuracy_per_sample[-1]))
         f.write('stream2 average_accuracy: {} \n'.format(sum(stream2_learner.accuracy)/stream2_learner.number_of_samples))
         f.write('stream2 first_layer_average_accuracy: {} \n \n'.format(sum(stream2_learner.first_layer_cascade.accuracy_per_sample)/stream2_learner.number_of_samples))
+        f.write('stream3 accuracy: {} \n'.format(stream3_learner.accuracy[-1]))
+        f.write('stream3 first_layer_accuracy: {} \n'.format(stream3_learner.first_layer_cascade.accuracy_per_sample[-1]))
+        f.write('stream3 average_accuracy: {} \n'.format(sum(stream3_learner.accuracy)/stream3_learner.number_of_samples))
+        f.write('stream3 first_layer_average_accuracy: {} \n \n'.format(sum(stream3_learner.first_layer_cascade.accuracy_per_sample)/stream3_learner.number_of_samples))
 
     import pudb; pudb.set_trace()  # XXX BREAKPOINT
     assert 1 == 1
@@ -396,36 +443,6 @@ def calculate_accuracy(learner, stream, max_samples=0):
 
     return learner
 
-
-#    cnt = 0
-#    max_samples = 100000
-#    predictions = array('i')
-#    proba_predictions = []
-#    wait_samples = 1
-#    correct_predictions = 0
-#
-#    while stream.has_more_samples() and cnt < max_samples:
-#        X, y = stream.next_sample()
-#        # Test every n samples
-#        if (cnt % wait_samples == 0) and (cnt != 0):
-#
-#            y_pred = learner.predict(X, y)
-#            if y_pred == y:
-#                correct_predictions +=1
-#
-#
-##            proba_predictions.append(learner.predict_proba(X)[0])
-#        learner.partial_fit(X, y)
-#        cnt += 1
-
-    import pudb; pudb.set_trace()  # XXX BREAKPOINT
-    expected_info = "HoeffdingTreeClassifier(binary_split=False, grace_period=200, leaf_prediction='nb', " \
-                    "max_byte_size=33554432, memory_estimate_period=1000000, nb_threshold=0, no_preprune=False, " \
-                    "nominal_attributes=[5, 6, 7, 8, 9, 10, 11, 12, 13, 14], remove_poor_atts=False, " \
-                    "split_confidence=1e-07, split_criterion='info_gain', stop_mem_management=False, " \
-                    "tie_threshold=0.05)"
-    info = " ".join([line.strip() for line in learner.get_info().split()])
-    assert info == expected_info
 #    deep_stream_learner = DeepStreamLearner()
 #    metrics = ['accuracy']
 #    output_file = os.path.join('data', 'test_data/ensemble_output.csv')
