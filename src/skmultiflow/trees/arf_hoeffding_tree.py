@@ -95,7 +95,7 @@ class ARFHoeffdingTreeClassifier(HoeffdingTreeClassifier):
                          grace_period=grace_period,
                          split_criterion=split_criterion,
                          split_confidence=split_confidence,
-                         tie_threshold=tie_threshold,
+                            tie_threshold=tie_threshold,
                          binary_split=binary_split,
                          stop_mem_management=stop_mem_management,
                          remove_poor_atts=remove_poor_atts,

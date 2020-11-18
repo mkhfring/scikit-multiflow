@@ -1,5 +1,0 @@
-stream3 accuracy: 0.8872588725887259 
-stream3 first_layer_accuracy: 0.8798687986879868 
-stream3 average_accuracy: 0.8797684770077295 
-stream3 first_layer_average_accuracy: 0.8767640240405657 
- 
