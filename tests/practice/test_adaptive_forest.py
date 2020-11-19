@@ -272,9 +272,7 @@ class AdaptiveHoeffdingTreeEnsemble(BaseSKMObject, ClassifierMixin, MetaEstimato
 
 class DeepStreamLearner(BaseSKMObject, ClassifierMixin, MetaEstimatorMixin):
     def __init__(self, n_ensembels=2, classes=None):
-        self.base_ensemble_learner = AdaptiveHoeffdingTreeEnsemble(
-            n_estimators=4
-        )
+        self.base_ensemble_learner =
         self.n_ensembles = n_ensembels
         self.ensembel_learners = None
         self.last_layer_cascade = None
@@ -377,16 +375,16 @@ def test_adaptive_forest():
     stream1 = DataStream(raw_data, name='Test')
     stream2 = DataStream(raw_data, name='Test')
 #    learner = ExtendedHoeffdingAdaptiveTree()
-    learner1 = AdaptiveHoeffdingTreeEnsemble(n_estimators=4)
+#    learner1 = AdaptiveHoeffdingTreeEnsemble(n_estimators=4)
     # stream1_learner = calculate_accuracy(learner, stream1, stream1.n_samples)
 #    stream2_learner = calculate_accuracy(learner1, stream2, stream2.n_samples)
 #    stream1_learner = calculate_accuracy(learner, stream1, stream1.n_samples)
-#    learner3 = AdaptiveRandomForestClassifier(n_estimators=3)
-#    stream3_learner = calculate_accuracy(learner3, stream1, stream1.n_samples)
+    learner3 = AdaptiveRandomForestClassifier(n_estimators=10)
+    stream3_learner = calculate_accuracy(learner3, stream1, stream1.n_samples)
 #    learner4 = StreamingRandomPatchesClassifier(n_estimators=3)
 #    stream4_learner = calculate_accuracy(learner4, stream1, stream1.n_samples)
-    learner5 = DeepStreamLearner(classes=stream1.target_values)
-    stream5_learner = calculate_accuracy(learner5, stream1, stream1.n_samples)
+#    learner5 = DeepStreamLearner(classes=stream1.target_values)
+#    stream5_learner = calculate_accuracy(learner5, stream1, stream1.n_samples)
 
     import pudb; pudb.set_trace()  # XXX BREAKPOINT
     assert 1 == 1

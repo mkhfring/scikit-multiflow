@@ -231,10 +231,12 @@ class AdaptiveRandomForestClassifier(BaseSKMObject, ClassifierMixin, MetaEstimat
                  no_preprune=False,
                  leaf_prediction='nba',
                  nb_threshold=0,
+                 classes=None,
                  nominal_attributes=None,
                  random_state=None):
         """AdaptiveRandomForestClassifier class constructor."""
         super().__init__()
+        self.classes = classes
         self.n_estimators = n_estimators
         self.max_features = max_features
         self.disable_weighted_vote = disable_weighted_vote
@@ -382,12 +384,16 @@ class AdaptiveRandomForestClassifier(BaseSKMObject, ClassifierMixin, MetaEstimat
             votes = deepcopy(self.get_votes_for_instance(X[i]))
             if votes == {}:
                 # Estimator is empty, all classes equal, default to zero
-                y_proba.append([0])
+                if self.classes is not None:
+                    y_proba.append(np.zeros(len(self.classes)))
+                else:
+                    y_proba.append([0])
             else:
                 if sum(votes.values()) != 0:
                     votes = normalize_values_in_dict(votes)
                 if self.classes is not None:
                     votes_array = np.zeros(int(max(self.classes)) + 1)
+
                 else:
                     votes_array = np.zeros(int(max(votes.keys())) + 1)
                 for key, value in votes.items():

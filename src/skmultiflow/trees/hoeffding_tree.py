@@ -701,7 +701,9 @@ class HoeffdingTreeClassifier(BaseSKMObject, ClassifierMixin):
                             split_atts = best_split_suggestions[i].split_test.get_atts_test_depends_on()
                             if len(split_atts) == 1:
                                 if best_suggestion.merit - best_split_suggestions[i].merit < hoeffding_bound:
-                                    poor_atts.remove(int(split_atts[0]))
+                                    if int(split_atts[0]) in poor_atts:
+                                        poor_atts.remove(int(split_atts[0]))
+
                     for poor_att in poor_atts:
                         node.disable_attribute(poor_att)
             if should_split:
